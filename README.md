@@ -1,293 +1,292 @@
-# Eclipso - High performance DNS daemon
+# Eclipso
 
 ```
 ┌─┐┌─┐┬  ┬┌─┐┌─┐┌─┐
 ├┤ │  │  │├─┘└─┐│ │
 └─┘└─┘┴─┘┴┴  └─┘└─┘
-v1.0.1
+v2.0.0
 ```
 
-# Project objectives
+**Fast, lightweight authoritative DNS server built for infrastructure you own.**
 
-* High performance - Speed wins
-* Lightweight - Bloat and large dependencies are not welcome
-* Container first - Built to be run as a container with support for Amazon ECS/EKS and Kubernetes
-* Ease of use - K.I.S.S
+Eclipso is a production-grade DNS server written in Go that gives you full control over your DNS infrastructure — no third-party API, no vendor dashboard, no per-query pricing. Define your zones in simple TOML files, store them on disk or in any S3-compatible object store, and let Eclipso handle the rest.
 
-# Installation
+It speaks UDP, TCP, and DNS-over-TLS (DoT), responds in ~160 microseconds, and fits in a single static binary. Whether you're running a handful of domains on a VPS or powering service discovery across a distributed cluster, Eclipso is designed to stay out of your way and just work.
 
-```
+### Why Eclipso?
+
+- **Self-hosted DNS done right** — Run your own authoritative nameserver without the operational complexity of BIND or PowerDNS. Zone files are human-readable TOML, configuration is environment variables, and the whole thing deploys as a single container.
+- **S3-native zone management** — Store zone files in AWS S3, [Predastore](https://github.com/mulgadc/predastore/), MinIO, or any S3-compatible backend. Eclipso syncs automatically, so you can manage DNS records through the same object storage pipeline as the rest of your infrastructure.
+- **Built for [MulgaOS Hive](https://github.com/mulgadc/hive/)** — Eclipso serves as the DNS backbone for Hive, an open-source AWS alternative. It handles both internal service discovery (SRV records for NATS, gateways, and other cluster services) and public-facing authoritative DNS, all from the same instance.
+- **Plays nice with public resolvers** — Full RFC compliance means Cloudflare (1.1.1.1), Google (8.8.8.8), and every other recursive resolver can properly resolve your domains. TCP fallback, EDNS0, correct NXDOMAIN/NODATA semantics, proper authority sections — the things that matter when your DNS needs to actually work on the real internet.
+
+## Features
+
+- **UDP + TCP + DNS-over-TLS** on configurable ports
+- **EDNS0** support for modern resolver compatibility
+- **10 record types** — A, AAAA, CNAME, MX, NS, TXT, SOA, SRV, CAA, PTR
+- **Wildcard records** with exact-match priority
+- **In-memory hashmap** for O(1) lookups (~160µs per query)
+- **Zone files in TOML** format, loaded from local filesystem or S3
+- **Live reload** — filesystem watch (fsnotify) or periodic S3 sync
+- **S3-compatible backends** — works with AWS S3, [Predastore](https://github.com/mulgadc/predastore/), MinIO, etc.
+- **Correct RFC semantics** — NXDOMAIN, NODATA, REFUSED, NS authority section, zone-based SOA serial
+- **Configurable upstream resolvers** with TLS and failover for CNAME chasing
+- **Graceful shutdown** on SIGTERM/SIGINT
+- **Container-first** — multi-arch Docker images, single binary
+
+## Quick Start
+
+```sh
 git clone https://github.com/benduncan/eclipso
 cd eclipso
 make build
+ZONE_DIR="./config/domains" ./bin/eclipso
 ```
 
-## Running eclipso
+Verify it works:
 
-```
-./bin/eclipso
-```
-
-## Zone file storage engines
-
-* Local filesystem (default)
-* S3 bucket (Env variable configuration required)
-* DynamoDB (Roadmap)
-
-## Zone file resync
-
-Given the performance requirements, Eclipso maintains a local hashmap containing the zone file database and does not introduce an external database or additional network latency to DNS domain requests.
-
-Eclipso will monitor the following to live reload zone file changes:
-
-* Local filesystem - Automatically live reload zone files based on filesystem events (add, modified & removed files)
-* S3 Bucket Sync - Periodic scheduler to compare the remote S3 bucket to the local zone database
-* S3 Bucket events - Roadmap, receive S3 events via SQS/SNS to live changes in the bucket
-* DynamoDB Stream - Roadmap, receive a live stream from DynamoDB to sync local state
-
-## Environment variables
-
-Configuration of Eclipso is made via environment variables.
-
-### Local directory config
-
-```
-ZONE_DIR="config/domains"
+```sh
+dig @127.0.0.1 hello_a.net A
+dig @127.0.0.1 hello_a.net MX
+dig @127.0.0.1 hello_a.net TXT
+dig @127.0.0.1 hello_a.net A +tcp      # TCP query
+dig @127.0.0.1 hello_a.net A +edns=0   # EDNS0 query
 ```
 
-### S3 configuration
+## Configuration
 
-To read configuration files from a specified S3 bucket
+All configuration is via environment variables.
 
-```
-AWS_ACCESS_KEY="XXX"
-AWS_SECRET_ACCESS_KEY="YYY"
-ZONE_DIR="s3://bucket-name"
-AWS_REGION="us-west-1" 
-```
+### Core
 
-Optional parameters
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZONE_DIR` | `config/domains/` | Path to zone files or `s3://bucket-name` |
+| `HOST` | `0.0.0.0` | Listen address |
+| `PORT` | `53` | Listen port (UDP + TCP) |
+| `ECLIPSO_LOG_IGNORE` | | Suppress all logging |
+| `ECLIPSO_LOG_DEBUG` | | Enable debug logging |
 
-```
-S3_SYNC_RETRY="120"
-```
+### DNS-over-TLS
 
-Specify the S3 bucket sync period in seconds (default 60).
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ECLIPSO_TLS_CERT` | | Path to TLS certificate (PEM) |
+| `ECLIPSO_TLS_KEY` | | Path to TLS private key |
+| `DOT_PORT` | `853` | DoT listener port |
 
-### Global config
+### S3 / S3-Compatible Storage
 
-```
-PORT=5353
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWS_ACCESS_KEY` | | AWS access key ID |
+| `AWS_SECRET_ACCESS_KEY` | | AWS secret access key |
+| `AWS_REGION` | | AWS region |
+| `ECLIPSO_S3_ENDPOINT` | | Custom S3 endpoint URL (for Predastore, MinIO, etc.) |
+| `ECLIPSO_S3_INSECURE` | | Skip TLS verification for self-signed certs |
+| `S3_SYNC_RETRY` | `60` | S3 sync interval in seconds |
 
-Run Eclpiso on the specified (UDP) port 5353. Default 53.
+### Upstream Resolvers
 
-```
-ECLIPSO_LOG_IGNORE=1
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ECLIPSO_UPSTREAM` | `tls://1.1.1.1:853,tls://8.8.8.8:853,1.1.1.1:53` | Comma-separated upstream servers for CNAME chasing. Prefix with `tls://` for DNS-over-TLS. |
 
-Disable verbose logging
+## Zone File Format
 
-```
-ECLIPSO_LOG_DEBUG=1
-```
+Zone files use TOML. Each file represents one zone and is named `<domain>.toml`.
 
-Enable additional debug logs
-
-# Zone configuration file
-
-Example configuration file
-
-```
-# Domain configuration file in TOML format.
+```toml
 version = 1.0
 
-# Domain settings
 [domain]
-domain = "hello_a.net"
-created = 2021-05-27T07:32:00Z
-modified = 2022-05-27T07:32:00Z
+domain = "example.com"
+soa = "ns1.example.com."
+created = 2024-01-01T00:00:00Z
+modified = 2024-06-15T12:00:00Z
 verified = true
 active = true
-ownerid = 10
+ownerid = 1
 
-# Default settings if not defined in each [[records]]
 [defaults]
 ttl = 3600
-type = 1
-class = 1
+type = 1    # A record
+class = 1   # IN
 
-# Domain entry, one entry per record
-# A record for root domain, hello_a.net > 203.100.1.1
+# A records
 [[records]]
 domain = ""
 address = "203.100.1.1"
 
-# A record for www.hello_a.net > 203.100.1.1
 [[records]]
 domain = "www."
 address = "203.100.1.1"
 
-# A record for host-1.hello_a.net > 203.100.1.2
+# Wildcard — matches any subdomain without an explicit record
 [[records]]
-domain = "host-1."
-address = "203.100.1.2"
+domain = "*."
+address = "203.100.1.99"
 
-# A record for host-1.hello_a.net > 203.100.1.3
+# NS records
 [[records]]
-domain = "host-2."
-address = "203.100.1.3"
+domain = ""
+type = 2
+address = "ns1.example.com."
 
-# MX record for hello_a.net, with MX preference set. 
+[[records]]
+domain = ""
+type = 2
+address = "ns2.example.com."
+
+# MX records
 [[records]]
 domain = ""
 type = 15
 preference = 10
-address = "host-1.hello_a.net."
+address = "mail.example.com."
 
-# MX record for hello_a.net, with MX preference set. 
-[[records]]
-domain = ""
-type = 15
-preference = 20
-address = "host-2.hello_a.net."
-
-# TXT record to specify SPF record
+# TXT records (SPF, DKIM, verification, etc.)
 [[records]]
 domain = ""
 type = 16
-address = "v=spf1 ip:203.100.1.2 ip:203.100.1.3 mx a -all"
+address = "v=spf1 mx a -all"
 
-# Sample TXT record for google-site-verification
+# AAAA record
 [[records]]
 domain = ""
-type = 16
-address = "google-site-verification=3a13e1788d7a1c3b4602afc083e855de"
+type = 28
+address = "2001:db8::1"
+
+# SRV record (service discovery)
+[[records]]
+domain = "_nats._tcp."
+type = 33
+priority = 10
+weight = 0
+port = 4222
+address = "node1.example.com."
+
+# CAA record (certificate authority authorization)
+[[records]]
+domain = ""
+type = 257
+caa_flag = 0
+caa_tag = "issue"
+address = "letsencrypt.org"
+
+# PTR record (reverse DNS — in a separate zone file for in-addr.arpa)
+# [[records]]
+# domain = "1."
+# type = 12
+# address = "host-1.example.com."
 ```
 
-To run Eclipso with the sample domain, append the configuration file to `./config/domains/hello_a.net.toml`
+### Record Type Reference
 
-Run Eclpiso:
+| Type | Code | Fields |
+|------|------|--------|
+| A | 1 | `address` (IPv4) |
+| NS | 2 | `address` (nameserver FQDN) |
+| CNAME | 5 | `address` (target FQDN) |
+| SOA | 6 | Auto-generated from `[domain]` section |
+| PTR | 12 | `address` (target FQDN) |
+| MX | 15 | `address` (mail server FQDN), `preference` |
+| TXT | 16 | `address` (text value) |
+| AAAA | 28 | `address` (IPv6) |
+| SRV | 33 | `address` (target FQDN), `priority`, `weight`, `port` |
+| CAA | 257 | `address` (CA domain), `caa_flag`, `caa_tag` |
 
-`ZONE_DIR="./config/domains" ./bin/eclipso`
+## Hive Integration
 
-Query the local instance to validate:
+Eclipso serves as the DNS layer for [MulgaOS Hive](https://github.com/mulgadc/hive/), providing both internal service discovery and public authoritative DNS.
 
-```
-$ dig @127.0.0.1 hello_a.net txt
+**Service discovery with SRV records:**
 
-;; QUESTION SECTION:
-;hello_a.net.			IN	TXT
+```toml
+# _nats._tcp.hive.phasegrid.net → node1.hive.phasegrid.net:4222
+[[records]]
+domain = "_nats._tcp.hive."
+type = 33
+priority = 10
+weight = 0
+port = 4222
+address = "node1.hive.phasegrid.net."
 
-;; ANSWER SECTION:
-hello_a.net.		3600	IN	TXT	"v=spf1 ip:203.100.1.2 ip:203.100.1.3 mx a -all"
-hello_a.net.		3600	IN	TXT	"google-site-verification=3a13e1788d7a1c3b4602afc083e855de"
-
-$ dig @127.0.0.1 hello_a.net mx
-
-; <<>> DiG 9.10.6 <<>> @127.0.0.1 hello_a.net mx
-; (1 server found)
-;; global options: +cmd
-;; Got answer:
-;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 43492
-;; flags: qr aa rd; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 0
-;; WARNING: recursion requested but not available
-
-;; QUESTION SECTION:
-;hello_a.net.			IN	MX
-
-;; ANSWER SECTION:
-hello_a.net.		3600	IN	MX	10 host-1.hello_a.net.
-hello_a.net.		3600	IN	MX	20 host-2.hello_a.net.
-```
-
-## Run within docker
-
-Using docker-compose (S3 bucket):
-
-```
-AWS_ACCESS_KEY="X" AWS_SECRET_ACCESS_KEY="Y" ZONE_DIR="s3://my-bucket" AWS_REGION="us-west-1" docker-compose up -d
+# _awsgw._tcp.hive.phasegrid.net → node1.hive.phasegrid.net:9999
+[[records]]
+domain = "_awsgw._tcp.hive."
+type = 33
+priority = 10
+weight = 0
+port = 9999
+address = "node1.hive.phasegrid.net."
 ```
 
-Standalone docker (filesystem method):
+**Using Predastore as the zone file backend:**
 
-```
-docker run --mount src=~/eclipso/config/domains,target=/config/domains,type=bind -e ZONE_DIR="/config/domains" -p 53:53/udp calacode/eclipso-dns
-```
+Hive's S3-compatible storage ([Predastore](https://github.com/mulgadc/predastore/)) can serve as the zone file backend, keeping DNS configuration alongside the rest of the Hive infrastructure:
 
-## Run as a standalone daemon
-
-```
-ZONE_DIR=./config/domains ./bin/eclipso
-```
-
-# High-level Roadmap
-
-Version 1.0.X:
-
-- [x] DNS server framework
-- [x] Filesystem support for zone files
-- [x] Filesystem live-reload events
-- [x] S3 Bucket support for zone files
-- [x] S3 resync period for live-reload
-- [x] Implement a hashmap for the local zone database
-- [x] Docker support
-
-Immediate roadmap:
-
-- [ ] Support additional zone types (SRV)
-- [ ] DynamoDB support
-- [ ] DynamoDB stream support
-- [ ] Improve benchmarking
-- [ ] Improve CLI flag support and env usage
-
-General roadmap:
-
-- [ ] Optimise local hashmap use Net.IP (v4/v6) types
-- [ ] Additional API daemon to add/delete/update zone files
-- [ ] Health-check support, change return address if end-point not answering
-- [ ] DNS resolver option - Raw lookups via root-servers to act as a DNS forwarder
-
-# Benchmarking
-
-Install `benchstat` to compare multiple benchmarks for a more accurate reading
-
-```
-go get golang.org/x/perf/cmd/benchstat
+```sh
+ZONE_DIR="s3://dns-zones" \
+ECLIPSO_S3_ENDPOINT="https://predastore.hive.phasegrid.net:8443" \
+ECLIPSO_S3_INSECURE=1 \
+AWS_ACCESS_KEY="..." \
+AWS_SECRET_ACCESS_KEY="..." \
+AWS_REGION="us-west-1" \
+./bin/eclipso
 ```
 
-Next, run the benchmark:
+## Docker
 
+**Docker Compose (S3):**
+
+```sh
+AWS_ACCESS_KEY="X" AWS_SECRET_ACCESS_KEY="Y" ZONE_DIR="s3://my-bucket" AWS_REGION="us-west-1" docker compose up -d
 ```
+
+**Standalone (filesystem):**
+
+```sh
+docker run \
+  --mount src=./config/domains,target=/config/domains,type=bind \
+  -e ZONE_DIR="/config/domains" \
+  -p 53:53/udp -p 53:53/tcp \
+  calacode/eclipso-dns
+```
+
+**With DNS-over-TLS:**
+
+```sh
+docker run \
+  --mount src=./config/domains,target=/config/domains,type=bind \
+  --mount src=./certs,target=/certs,type=bind \
+  -e ZONE_DIR="/config/domains" \
+  -e ECLIPSO_TLS_CERT="/certs/server.pem" \
+  -e ECLIPSO_TLS_KEY="/certs/server.key" \
+  -p 53:53/udp -p 53:53/tcp -p 853:853/tcp \
+  calacode/eclipso-dns
+```
+
+## Testing
+
+```sh
+make test          # Unit tests (31 tests)
+make race          # Race condition detection
+make bench         # Benchmarks with benchstat
+make e2e           # E2E tests via Docker (Predastore + Eclipso)
+make test-all      # Unit tests + race detection
+```
+
+## Benchmarking
+
+```sh
 make bench
 ```
 
-This will simulate 24 domains (hello_a.net ... hello_z.net) with ~255 sub-domains (host-1 ... host-255) with sample TXT records. The benchmark script will query the local instance each record for benchmarking purposes.
+Simulates 26 domains with ~255 subdomains each:
 
 ```
-ECLIPSO_LOG_IGNORE=1 go test -bench=. ./pkg/backend -count 5 -benchmem | tee benchmark.out
-goos: darwin
-goarch: amd64
-pkg: github.com/benduncan/eclipso/pkg/backend
-cpu: Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz
-BenchmarkDNSQueryA-8     	    8972	    175261 ns/op	    3088 B/op	      58 allocs/op
-BenchmarkDNSQueryA-8     	    8598	    163153 ns/op	    3087 B/op	      58 allocs/op
-BenchmarkDNSQueryA-8     	    8149	    162703 ns/op	    3089 B/op	      58 allocs/op
-BenchmarkDNSQueryA-8     	    6561	    155536 ns/op	    3088 B/op	      58 allocs/op
-BenchmarkDNSQueryA-8     	    8355	    140921 ns/op	    3088 B/op	      58 allocs/op
-BenchmarkDNSQueryTXT-8   	    7900	    145299 ns/op	    3682 B/op	      68 allocs/op
-BenchmarkDNSQueryTXT-8   	    8028	    168382 ns/op	    3681 B/op	      68 allocs/op
-BenchmarkDNSQueryTXT-8   	    7179	    154651 ns/op	    3681 B/op	      68 allocs/op
-BenchmarkDNSQueryTXT-8   	    7720	    204199 ns/op	    3680 B/op	      68 allocs/op
-BenchmarkDNSQueryTXT-8   	    8929	    186801 ns/op	    3680 B/op	      68 allocs/op
-BenchmarkDNSQueryMX-8    	    7741	    174948 ns/op	    4049 B/op	      76 allocs/op
-BenchmarkDNSQueryMX-8    	    9464	    152655 ns/op	    4050 B/op	      76 allocs/op
-BenchmarkDNSQueryMX-8    	    7480	    153643 ns/op	    4049 B/op	      76 allocs/op
-BenchmarkDNSQueryMX-8    	    6700	    181419 ns/op	    4049 B/op	      76 allocs/op
-BenchmarkDNSQueryMX-8    	    8418	    148584 ns/op	    4051 B/op	      76 allocs/op
-PASS
-ok  	github.com/benduncan/eclipso/pkg/backend	31.133s
-benchstat benchmark.out
 name           time/op
 DNSQueryA-8     160µs ±12%
 DNSQueryTXT-8   172µs ±19%
@@ -297,9 +296,21 @@ name           alloc/op
 DNSQueryA-8    3.09kB ± 0%
 DNSQueryTXT-8  3.68kB ± 0%
 DNSQueryMX-8   4.05kB ± 0%
-
-name           allocs/op
-DNSQueryA-8      58.0 ± 0%
-DNSQueryTXT-8    68.0 ± 0%
-DNSQueryMX-8     76.0 ± 0%
 ```
+
+## Roadmap
+
+See [DEV.md](DEV.md) for the full development plan.
+
+- [ ] DNS-over-HTTPS (DoH)
+- [ ] DNSSEC signing
+- [ ] Prometheus metrics endpoint
+- [ ] Rate limiting / DDoS protection
+- [ ] Dynamic record API (HTTP)
+- [ ] Split-horizon DNS (internal vs external views)
+- [ ] Health-aware DNS responses
+- [ ] Response caching
+
+## License
+
+MIT
