@@ -3,7 +3,7 @@ GO_PROJECT_NAME := eclipso-dns
 # GO commands
 go_build:
 	@echo "\n....Building $(GO_PROJECT_NAME)"
-	go build -ldflags "-s -w" -o ./bin/ ./cmd/eclipso 
+	go build -ldflags "-s -w" -o ./bin/ ./cmd/eclipso
 
 go_dep_install:
 	@echo "\n....Installing dependencies for $(GO_PROJECT_NAME)...."
@@ -15,8 +15,8 @@ go_run:
 
 test:
 	@echo "\n....Running tests for $(GO_PROJECT_NAME)...."
-	ECLIPSO_LOG_IGNORE=1 go test ./pkg/backend
-	ECLIPSO_LOG_IGNORE=1 go test ./pkg/config
+	ECLIPSO_LOG_IGNORE=1 go test -v ./pkg/backend
+	ECLIPSO_LOG_IGNORE=1 go test -v ./pkg/config
 
 # Project rules
 build:
@@ -25,7 +25,6 @@ build:
 bench:
 	ECLIPSO_LOG_IGNORE=1 go test -bench=. ./pkg/backend -count 5 -benchmem | tee benchmark.out
 	benchstat benchmark.out
-
 
 prof:
 	ECLIPSO_LOG_IGNORE=1 go test -cpuprofile cpu.prof -memprofile mem.prof -bench=. ./pkg/backend
@@ -43,16 +42,28 @@ else
 endif
 
 clean:
-	#rm test.db
-	#rm -rf ./pkg/*
-	#rm -rf ./src/*
-	#rm -rf ./bin/*
+	rm -rf ./bin/*
+
+# E2E tests using Docker (predastore + eclipso)
+e2e:
+	@echo "\n....Running E2E tests...."
+	cd e2e && docker compose up -d --build
+	@echo "Waiting for services to start..."
+	sleep 5
+	cd e2e && ECLIPSO_E2E=1 go test -v -timeout 120s ./...
+	cd e2e && docker compose down -v
+
+e2e-down:
+	cd e2e && docker compose down -v
+
+# Full test suite
+test-all:
+	$(MAKE) test
+	$(MAKE) race
 
 docker:
-	@echo "\n....Building latest docker image and uploading to GCR ...."
+	@echo "\n....Building latest docker image and uploading ...."
 	$(MAKE) test
 	docker buildx build --push --platform linux/arm/v7,linux/arm64/v8,linux/amd64 --tag calacode/$(GO_PROJECT_NAME):latest .
-	#docker tag $(GO_PROJECT_NAME) calacode/$(GO_PROJECT_NAME):latest
-	#docker push calacode/$(GO_PROJECT_NAME):latest
 
-.PHONY: docker db_seed go_build go_dep_install go_prep_install go_run build run restart historical-data
+.PHONY: docker go_build go_dep_install go_run build run clean test test-all e2e e2e-down bench prof race
