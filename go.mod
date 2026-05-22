@@ -1,4 +1,4 @@
-module github.com/benduncan/eclipso
+module github.com/mulgadc/eclipso
 
 go 1.24.0
 

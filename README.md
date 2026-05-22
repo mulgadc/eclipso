@@ -17,7 +17,7 @@ It speaks UDP, TCP, and DNS-over-TLS (DoT), responds in ~160 microseconds, and f
 
 - **Self-hosted DNS done right** — Run your own authoritative nameserver without the operational complexity of BIND or PowerDNS. Zone files are human-readable TOML, configuration is environment variables, and the whole thing deploys as a single container.
 - **S3-native zone management** — Store zone files in AWS S3, [Predastore](https://github.com/mulgadc/predastore/), MinIO, or any S3-compatible backend. Eclipso syncs automatically, so you can manage DNS records through the same object storage pipeline as the rest of your infrastructure.
-- **Built for [MulgaOS Hive](https://github.com/mulgadc/hive/)** — Eclipso serves as the DNS backbone for Hive, an open-source AWS alternative. It handles both internal service discovery (SRV records for NATS, gateways, and other cluster services) and public-facing authoritative DNS, all from the same instance.
+- **Built for [MulgaOS Spinifex](https://github.com/mulgadc/spinifex)** — Eclipso serves as the DNS backbone for Hive, an open-source AWS alternative. It handles both internal service discovery (SRV records for NATS, gateways, and other cluster services) and public-facing authoritative DNS, all from the same instance.
 - **Plays nice with public resolvers** — Full RFC compliance means Cloudflare (1.1.1.1), Google (8.8.8.8), and every other recursive resolver can properly resolve your domains. TCP fallback, EDNS0, correct NXDOMAIN/NODATA semantics, proper authority sections — the things that matter when your DNS needs to actually work on the real internet.
 
 ## Features
