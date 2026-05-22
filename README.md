@@ -29,7 +29,7 @@ It speaks UDP, TCP, and DNS-over-TLS (DoT), responds in ~160 microseconds, and f
 - **In-memory hashmap** for O(1) lookups (~160µs per query)
 - **Zone files in TOML** format, loaded from local filesystem or S3
 - **Live reload** — filesystem watch (fsnotify) or periodic S3 sync
-- **S3-compatible backends** — works with AWS S3, [Predastore](https://github.com/mulgadc/predastore/), MinIO, etc.
+- **S3-compatible backends** — works with AWS S3, [Predastore](https://github.com/mulgadc/predastore), MinIO, etc.
 - **Correct RFC semantics** — NXDOMAIN, NODATA, REFUSED, NS authority section, zone-based SOA serial
 - **Configurable upstream resolvers** with TLS and failover for CNAME chasing
 - **Graceful shutdown** on SIGTERM/SIGINT
@@ -38,7 +38,7 @@ It speaks UDP, TCP, and DNS-over-TLS (DoT), responds in ~160 microseconds, and f
 ## Quick Start
 
 ```sh
-git clone https://github.com/benduncan/eclipso
+git clone https://github.com/mulgadc/eclipso
 cd eclipso
 make build
 ZONE_DIR="./config/domains" ./bin/eclipso
@@ -197,39 +197,39 @@ address = "letsencrypt.org"
 | SRV | 33 | `address` (target FQDN), `priority`, `weight`, `port` |
 | CAA | 257 | `address` (CA domain), `caa_flag`, `caa_tag` |
 
-## Hive Integration
+## Spinifex Integration
 
-Eclipso serves as the DNS layer for [MulgaOS Hive](https://github.com/mulgadc/hive/), providing both internal service discovery and public authoritative DNS.
+Eclipso serves as the DNS layer for [Spinifex](https://github.com/mulgadc/spinifex), providing both internal service discovery and public authoritative DNS.
 
 **Service discovery with SRV records:**
 
 ```toml
-# _nats._tcp.hive.phasegrid.net → node1.hive.phasegrid.net:4222
+# _nats._tcp.spinifex.phasegrid.net → node1.spinifex.phasegrid.net:4222
 [[records]]
-domain = "_nats._tcp.hive."
+domain = "_nats._tcp.spinifex."
 type = 33
 priority = 10
 weight = 0
 port = 4222
-address = "node1.hive.phasegrid.net."
+address = "node1.spinifex.phasegrid.net."
 
-# _awsgw._tcp.hive.phasegrid.net → node1.hive.phasegrid.net:9999
+# _awsgw._tcp.spinifex.phasegrid.net → node1.spinifex.phasegrid.net:9999
 [[records]]
-domain = "_awsgw._tcp.hive."
+domain = "_awsgw._tcp.spinifex."
 type = 33
 priority = 10
 weight = 0
 port = 9999
-address = "node1.hive.phasegrid.net."
+address = "node1.spinifex.phasegrid.net."
 ```
 
 **Using Predastore as the zone file backend:**
 
-Hive's S3-compatible storage ([Predastore](https://github.com/mulgadc/predastore/)) can serve as the zone file backend, keeping DNS configuration alongside the rest of the Hive infrastructure:
+Mulga's S3-compatible storage ([Predastore](https://github.com/mulgadc/predastore)) can serve as the zone file backend, keeping DNS configuration alongside the rest of the Spinifex infrastructure:
 
 ```sh
 ZONE_DIR="s3://dns-zones" \
-ECLIPSO_S3_ENDPOINT="https://predastore.hive.phasegrid.net:8443" \
+ECLIPSO_S3_ENDPOINT="https://predastore.spinifex.phasegrid.net:8443" \
 ECLIPSO_S3_INSECURE=1 \
 AWS_ACCESS_KEY="..." \
 AWS_SECRET_ACCESS_KEY="..." \
