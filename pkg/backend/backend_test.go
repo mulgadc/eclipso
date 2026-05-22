@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benduncan/eclipso/pkg/backend"
-	"github.com/benduncan/eclipso/pkg/config"
 	"github.com/miekg/dns"
+	"github.com/mulgadc/eclipso/pkg/backend"
+	"github.com/mulgadc/eclipso/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

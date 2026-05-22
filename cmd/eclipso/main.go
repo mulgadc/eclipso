@@ -5,7 +5,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/benduncan/eclipso/pkg/backend"
+	"github.com/mulgadc/eclipso/pkg/backend"
 )
 
 const eclipso_version = "2.0.0"

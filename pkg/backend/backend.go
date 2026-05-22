@@ -9,8 +9,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/benduncan/eclipso/pkg/config"
 	"github.com/miekg/dns"
+	"github.com/mulgadc/eclipso/pkg/config"
 	log "github.com/sirupsen/logrus"
 )
 
